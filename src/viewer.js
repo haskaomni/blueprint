@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 import {
   makeSurfaceMaterial,
@@ -41,6 +42,7 @@ export class Viewer {
     this.reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
     this.parts = [];
+    this.plumes = [];
     this.hoverPart = null;
     this.selectedPart = null;
     this.state = {
@@ -87,10 +89,7 @@ export class Viewer {
     this.inner.add(this.orient);
     this.scene.add(this.stage);
 
-    const o = this.config.orientation || { rotX: 0, rotY: 0, rotZ: 0 };
-    this.orient.rotation.set(o.rotX || 0, o.rotY || 0, o.rotZ || 0);
-    this._orientQuat = new THREE.Quaternion().setFromEuler(this.orient.rotation);
-    this._orientQuatInv = this._orientQuat.clone().invert();
+    this._applyOrientation();
 
     // dual blueprint grid
     const gridFine = new THREE.GridHelper(72, 72, 0xc6e3fe, 0xc6e3fe);
@@ -177,22 +176,78 @@ export class Viewer {
 
   // ------------------------------------------------------------- model load
 
+  _applyOrientation() {
+    const o = this.config.orientation || { rotX: 0, rotY: 0, rotZ: 0 };
+    this.orient.rotation.set(o.rotX || 0, o.rotY || 0, o.rotZ || 0);
+    this._orientQuat = new THREE.Quaternion().setFromEuler(this.orient.rotation);
+    this._orientQuatInv = this._orientQuat.clone().invert();
+  }
+
+  /** Drop the current vehicle (geometry, materials, plumes) and load a new one. */
+  async loadVehicle(config) {
+    // dispose previous model
+    const disposedGeo = new Set();
+    const disposedMat = new Set();
+    this.orient.traverse((obj) => {
+      if (obj.geometry && !disposedGeo.has(obj.geometry)) {
+        disposedGeo.add(obj.geometry);
+        obj.geometry.dispose();
+      }
+      if (obj.material && !disposedMat.has(obj.material)) {
+        disposedMat.add(obj.material);
+        obj.material.dispose();
+      }
+    });
+    this.orient.clear();
+    for (const pl of this.plumes || []) {
+      this.stage.remove(pl.group);
+      pl.flash.geometry.dispose();
+      pl.cone.geometry.dispose();
+      pl.flashMat.dispose();
+      pl.coneMat.dispose();
+    }
+    this.plumes = [];
+
+    // reset interaction / action state
+    this.config = config;
+    this.parts = [];
+    this.hoverPart = null;
+    this.selectedPart = null;
+    this.state.explode = { t: 0, target: 0 };
+    this.state.scan = { t: 0, target: 0 };
+    this.state.drive = { t: 0, target: 0 };
+    this.fire = { active: false, t: 0, burst: 0 };
+    this.tween = null;
+    this.controls.enabled = true;
+    this.stage.scale.setScalar(1);
+    this.stage.position.set(0, 0, 0);
+    this.stage.rotation.set(0, 0, 0);
+    this.hooks.onHoverPart?.(null);
+
+    this._applyOrientation();
+    return this.load();
+  }
+
   async load() {
-    const gltf = await new GLTFLoader().loadAsync(this.config.src);
+    const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
+    const gltf = await loader.loadAsync(this.config.src);
     const root = gltf.scene;
     root.updateMatrixWorld(true);
 
+    // collect meshes; record each mesh's ancestor path so part rules can
+    // match semantic group names (e.g. "Superheavy Block 3 V4_30>Raptor")
     const meshes = [];
-    root.traverse((obj) => {
-      if (obj.isMesh) meshes.push(obj);
-      else if (obj.isLineSegments) obj.material = makeEdgeMaterial();
-    });
-    // weld duplicated seam vertices (CFD exports split the hull into strips);
-    // otherwise EdgesGeometry treats every strip boundary as an open edge
-    for (const mesh of meshes) {
-      mesh.geometry = mergeVertices(mesh.geometry, 1e-3);
-      mesh.geometry.computeVertexNormals();
-    }
+    const walk = (obj, path) => {
+      const p = path ? `${path}>${obj.name || '?'}` : obj.name || '?';
+      if (obj.isMesh) {
+        obj.userData.path = p;
+        meshes.push(obj);
+      } else if (obj.isLineSegments) {
+        obj.material = makeEdgeMaterial();
+      }
+      for (const c of obj.children) walk(c, p);
+    };
+    walk(root, '');
 
     this._buildParts(meshes);
     this._normalize();
@@ -217,7 +272,7 @@ export class Viewer {
     const hull = new THREE.Mesh(geo, hullMat);
     hull.renderOrder = 1;
 
-    const edgeMat = makeEdgeMaterial();
+    const edgeMat = makeEdgeMaterial(this.config.edgeOpacity ?? 0.78);
     const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geo, EDGE_ANGLE), edgeMat);
     edges.renderOrder = 2;
 
@@ -231,34 +286,48 @@ export class Viewer {
     const buckets = defs.map(() => []); // wrapped entries per part
 
     if (useRegions) {
-      // split triangle soup by raw-space slab regions (single-mesh models)
+      // split triangle soup by raw-space slab regions (single-mesh models).
+      // Weld first: CFD exports split the hull into strips, and EdgesGeometry
+      // would treat every strip boundary as an open edge.
       const axisIdx = { x: 0, y: 1, z: 2 }[defs.find((d) => d.region).region.axis];
       const ranges = defs.map((d) => d.region);
       for (const mesh of meshes) {
-        const split = splitGeometryByRanges(mesh.geometry, axisIdx, ranges);
+        const weldedSrc = mergeVertices(mesh.geometry, 1e-3);
+        const split = splitGeometryByRanges(weldedSrc, axisIdx, ranges);
         split.forEach((geo, i) => {
           if (!geo) return;
           // clipped geometry is non-indexed soup: weld for smooth normals
           const welded = mergeVertices(geo, 1e-3);
           welded.computeVertexNormals();
-          buckets[i].push(this._wrapGeometry(welded, `${mesh.name}#${defs[i].code}`));
+          const w = this._wrapGeometry(welded, `${mesh.name}#${defs[i].code}`);
+          w.group.applyMatrix4(mesh.matrixWorld);
+          w.box = indexedBoundingBox(welded).applyMatrix4(mesh.matrixWorld);
+          buckets[i].push(w);
         });
       }
     } else if (defs.length) {
-      // match mode: assign whole meshes to parts by name substring
-      const misc = [];
+      // match mode: assign whole meshes to parts by ancestor-path substring,
+      // first match wins; unmatched meshes go to the part with fallback:true.
+      // The source node's world matrix is baked onto the wrapper group —
+      // quantized/compressed GLBs carry dequantization + placement there.
+      const fallback = Math.max(0, defs.findIndex((d) => d.fallback));
       for (const mesh of meshes) {
-        const i = defs.findIndex((d) => d.match && mesh.name.includes(d.match));
-        const wrapped = this._wrapGeometry(mesh.geometry, mesh.name);
-        if (i >= 0) buckets[i].push(wrapped);
-        else misc.push(wrapped);
+        const path = mesh.userData.path || mesh.name;
+        let i = defs.findIndex((d) => d.match && path.includes(d.match));
+        if (i < 0) i = fallback;
+        const w = this._wrapGeometry(mesh.geometry, mesh.name);
+        w.group.applyMatrix4(mesh.matrixWorld);
+        w.box = indexedBoundingBox(mesh.geometry).applyMatrix4(mesh.matrixWorld);
+        buckets[i].push(w);
       }
-      if (misc.length) buckets[0].push(...misc);
     } else {
       // no part defs: one part per mesh
       meshes.forEach((mesh, i) => {
         defs.push({ code: `P-${String(i + 1).padStart(2, '0')}`, title: mesh.name || `PART ${i + 1}`, description: '' });
-        buckets.push([this._wrapGeometry(mesh.geometry, mesh.name)]);
+        const w = this._wrapGeometry(mesh.geometry, mesh.name);
+        w.group.applyMatrix4(mesh.matrixWorld);
+        w.box = indexedBoundingBox(mesh.geometry).applyMatrix4(mesh.matrixWorld);
+        buckets.push([w]);
       });
     }
 
@@ -275,10 +344,10 @@ export class Viewer {
         group.add(w.group);
         surfaceMats.push(w.surfaceMat);
         edgeMats.push(w.edgeMat);
-        hullMats.push(w.hullMat);
+        hullMats.push({ mat: w.hullMat, scale: w.group.scale.x });
         w.surface.userData.partIndex = i;
         surfaces.push(w.surface);
-        box.union(indexedBoundingBox(w.group.children[0].geometry));
+        box.union(w.box);
       }
       this.orient.add(group);
       this.parts.push({
@@ -299,6 +368,12 @@ export class Viewer {
   }
 
   _normalize() {
+    // measure in raw space: inner may still carry the previous vehicle's
+    // scale after a vehicle switch, so reset it first; then force a full
+    // matrix refresh — setFromObject would otherwise read stale matrixWorld
+    this.inner.scale.setScalar(1);
+    this.inner.position.set(0, 0, 0);
+    this.scene.updateMatrixWorld(true);
     const box = new THREE.Box3().setFromObject(this.orient);
     const size = box.getSize(new THREE.Vector3());
     const s = TARGET_LENGTH / Math.max(size.x, size.y, size.z);
@@ -307,9 +382,12 @@ export class Viewer {
     const center = box.getCenter(new THREE.Vector3());
     this.inner.position.set(-center.x * s, -box.min.y * s, -center.z * s);
 
-    // outline width is in raw geometry units -> scale to world width
+    // outline width is in geometry-local units and each wrapper group carries
+    // the source node's baked scale — compensate both to hit world width
     for (const p of this.parts) {
-      for (const m of p.hullMats) m.uniforms.uWidth.value = HULL_WIDTH / s;
+      for (const h of p.hullMats) {
+        h.mat.uniforms.uWidth.value = HULL_WIDTH / (s * h.scale);
+      }
     }
 
     // ground shadow disc sized from horizontal footprint

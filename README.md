@@ -20,6 +20,9 @@ Open the printed local URL. No environment variables or keys required.
 
 ## Controls
 
+- **VEHICLE INDEX** (left): click to switch vehicles. The current model is
+  unloaded (geometry/materials disposed) and the new one is loaded with a
+  loading overlay; view and action state reset to ISO / idle.
 - **Drag** to orbit (view state flips to `ORBIT`), **wheel** to zoom (0.62–2.8×).
 - **CAMERA VIEW** (top right): ISO / F-QTR / R-QTR / SIDE / FRONT / PLAN,
   animated ~920 ms easeInOutCubic transitions (140 ms under
@@ -79,13 +82,36 @@ the longest edge is scaled to ~10.8 units, centered on X/Z, grounded at y=0.
 
 Parts can be defined two ways:
 
-- `match: "substring"` — assign whole meshes whose name contains the
-  substring (multi-mesh GLBs).
+- `match: "substring"` — assign whole meshes whose **ancestor path**
+  (`Group>SubGroup>MeshName`) contains the substring; first match wins, and
+  one part may set `fallback: true` to catch the rest (multi-mesh GLBs).
+  Note that GLTFLoader sanitizes node names (spaces become `_`, dots are
+  stripped), so match against the sanitized form, e.g. `Aft_Flaps002_2`.
 - `region: { axis: 'z', min, max }` — split a single-mesh GLB into parts by
   **clipping** triangles against axis-aligned slab planes in **raw** model
   coordinates (inspect the GLB first, e.g. with a gltf-transform script, to
   find sensible cut planes). Clipped parts are welded and re-normaled
   automatically.
+
+Other optional knobs: `edgeOpacity` (default 0.78) tones down edge linework
+for densely-ribbed models.
+
+GLBs compressed with meshopt/quantization (e.g. via `gltf-transform meshopt`)
+are supported — the loader wires three's `MeshoptDecoder`, and node
+transforms (including the quantization compensation) are baked into each
+part wrapper at load time.
+
+## Model analysis notes (starship-block3.glb)
+
+243 nodes / 211 meshes / 876k verts, organized in two subtrees:
+`Starship Block 3 V4_13` (ship, y 14.5–25.1: body, 2 fwd flaps, 2 aft flaps,
+cargo door, 3 sea-level + 3 vacuum Raptor 3s) stacked on
+`Superheavy Block 3 V4_30` (booster, y 0–14.6: body, 3 grid fins, 13
+Raptor 3s in a ring of 10 + inner trio). Already upright along +Y with the
+base at y=0, so no `orientation` fix is needed. Muzzles follow the 13 booster
+engine positions (normalized space, y ≈ 0.08). Optimized from the 40 MB
+Sketchfab export with `gltf-transform resize 1024 + webp + meshopt` → 8.0 MB,
+keeping the node hierarchy so parts group by real subassemblies.
 
 ## Model analysis notes (starship.glb)
 
@@ -101,14 +127,18 @@ ring + center).
 
 ## Model source & license
 
-- Model: SpaceX Starship, by AllThingsSpace / Sketchfab user
+- `starship.glb`: SpaceX Starship, by AllThingsSpace / Sketchfab user
   [@sunnychen753](https://sketchfab.com/sunnychen753), obtained via
   fetchcfd (project 4329), distributed under a **CC Attribution** license.
-- If you redistribute or build on this project, keep the attribution above.
+- `starship-block3.glb`: This work is based on "SpaceX Starship Block 3"
+  (https://sketchfab.com/3d-models/spacex-starship-block-3-6f6c6f88a3eb4b4d822fdca66733fbb2)
+  by Clarence365 (https://sketchfab.com/clarence365) licensed under
+  [CC-BY-4.0](http://creativecommons.org/licenses/by/4.0/).
+- If you redistribute or build on this project, keep the attributions above.
 - All viewer code in this repository is original; the blueprint styling is a
   clean-room reimplementation of the engineering-drawing aesthetic.
 
 ## License
 
 The original viewer code is available under the [MIT License](LICENSE). The
-bundled model remains subject to the CC Attribution license described above.
+bundled models remain subject to the CC licenses described above.

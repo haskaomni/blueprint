@@ -88,11 +88,11 @@ export function makeHullMaterial(width = 0.025) {
 }
 
 /** Edge lines (EdgesGeometry). */
-export function makeEdgeMaterial() {
+export function makeEdgeMaterial(opacity = 0.78) {
   return new THREE.LineBasicMaterial({
     color: INK.clone(),
     transparent: true,
-    opacity: 0.78,
+    opacity,
     depthWrite: false,
   });
 }

@@ -10,23 +10,41 @@ const ACTION_DEFS = [
   { id: 'fire', key: '4', label: 'FIRE' },
 ];
 
-export function initUI(viewer, vehicle) {
-  // ---- masthead ----
+export function setMasthead(vehicle) {
   $('mast-drawing').textContent = `DWG ${vehicle.drawing}`;
   $('mast-title').textContent = vehicle.title;
   $('mast-code').textContent = vehicle.code;
   $('mast-faction').textContent = vehicle.faction;
   $('mast-role').textContent = vehicle.role;
   $('mast-desc').textContent = vehicle.description;
+}
+
+export function setLoading(visible, text = 'LOADING DRAWING…') {
+  const el = $('loading');
+  el.textContent = text;
+  el.classList.toggle('done', !visible);
+}
+
+export function initUI(viewer, vehicle, { onSelectVehicle } = {}) {
+  // ---- masthead ----
+  setMasthead(vehicle);
 
   // ---- vehicle index ----
   const list = $('vehicle-list');
+  const items = {};
   for (const v of VEHICLES) {
     const li = document.createElement('li');
     if (v.id === vehicle.id) li.classList.add('active');
     li.innerHTML = `<span class="v-title">${v.title}</span><span class="v-code">${v.code}</span>`;
+    li.addEventListener('click', () => onSelectVehicle?.(v));
     list.appendChild(li);
+    items[v.id] = li;
   }
+  const setActiveVehicle = (id) => {
+    for (const [vid, li] of Object.entries(items)) {
+      li.classList.toggle('active', vid === id);
+    }
+  };
 
   // ---- camera view buttons ----
   const viewBox = $('view-buttons');
@@ -77,7 +95,7 @@ export function initUI(viewer, vehicle) {
     }
   });
 
-  return { viewBtns, refreshActions };
+  return { viewBtns, refreshActions, setActiveVehicle };
 }
 
 export function bindViewerHooks(viewer, ui) {
