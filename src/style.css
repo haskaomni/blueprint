@@ -1,0 +1,251 @@
+/* Blueprint engineering-drawing theme */
+:root {
+  --bg: #064295;
+  --bg-deep: #053577;
+  --ink: #c6e3fe;
+  --ink-dim: rgba(198, 227, 254, 0.55);
+  --ink-faint: rgba(198, 227, 254, 0.28);
+  --hi: #eef8ff;
+  --mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+}
+
+/* ---- blueprint paper background: dual-scale grid + vignette ---- */
+#blueprint-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  background:
+    radial-gradient(ellipse at 50% 42%, rgba(238, 248, 255, 0.06), transparent 62%),
+    linear-gradient(rgba(198, 227, 254, 0.055) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(198, 227, 254, 0.055) 1px, transparent 1px),
+    linear-gradient(rgba(198, 227, 254, 0.11) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(198, 227, 254, 0.11) 1px, transparent 1px),
+    var(--bg);
+  background-size:
+    100% 100%,
+    26px 26px,
+    26px 26px,
+    130px 130px,
+    130px 130px,
+    100% 100%;
+}
+
+#blueprint-noise {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  opacity: 0.05;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='240' height='240' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+#viewport {
+  position: fixed;
+  inset: 0;
+  z-index: 2;
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none;
+}
+
+/* ---- drawing frame + corner ticks ---- */
+#frame {
+  position: fixed;
+  inset: 14px;
+  z-index: 3;
+  pointer-events: none;
+  border: 1px solid var(--ink-faint);
+  box-shadow: inset 0 0 0 1px rgba(6, 66, 149, 0.35);
+}
+.corner { position: absolute; width: 46px; height: 46px; }
+.corner::before, .corner::after { content: ""; position: absolute; background: var(--ink-dim); }
+.corner::before { width: 46px; height: 1px; }
+.corner::after { width: 1px; height: 46px; }
+.corner.tl { top: -1px; left: -1px; }
+.corner.tl::before { top: 0; left: 0; }
+.corner.tl::after { top: 0; left: 0; }
+.corner.tr { top: -1px; right: -1px; }
+.corner.tr::before { top: 0; right: 0; }
+.corner.tr::after { top: 0; right: 0; }
+.corner.bl { bottom: -1px; left: -1px; }
+.corner.bl::before { bottom: 0; left: 0; }
+.corner.bl::after { bottom: 0; left: 0; }
+.corner.br { bottom: -1px; right: -1px; }
+.corner.br::before { bottom: 0; right: 0; }
+.corner.br::after { bottom: 0; right: 0; }
+/* tick scales along the frame edges */
+#frame::before, #frame::after {
+  content: "";
+  position: absolute;
+  opacity: 0.5;
+}
+#frame::before {
+  top: -5px; left: 60px; right: 60px; height: 5px;
+  background: repeating-linear-gradient(90deg, var(--ink-dim) 0 1px, transparent 1px 26px);
+}
+#frame::after {
+  left: -5px; top: 60px; bottom: 60px; width: 5px;
+  background: repeating-linear-gradient(0deg, var(--ink-dim) 0 1px, transparent 1px 26px);
+}
+
+/* ---- shared panel style ---- */
+#masthead, #vehicle-index, #camera-views, #system-actions, #telemetry {
+  position: fixed;
+  z-index: 4;
+  pointer-events: none;
+}
+.panel-title {
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  color: var(--ink-dim);
+  border-bottom: 1px solid var(--ink-faint);
+  padding-bottom: 5px;
+  margin-bottom: 8px;
+}
+.panel-tag {
+  float: right;
+  color: var(--hi);
+  letter-spacing: 0.12em;
+}
+
+/* ---- masthead ---- */
+#masthead { top: 30px; left: 34px; max-width: 460px; }
+.mast-row { display: flex; gap: 14px; margin-bottom: 6px; }
+.mast-tag { font-size: 10px; letter-spacing: 0.26em; color: var(--hi); }
+.mast-tag.dim { color: var(--ink-dim); }
+#masthead h1 {
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: var(--hi);
+  text-shadow: 0 0 18px rgba(198, 227, 254, 0.25);
+}
+.mast-sub { margin-top: 6px; font-size: 11px; letter-spacing: 0.18em; color: var(--ink); }
+.mast-sub .sep { color: var(--ink-faint); margin: 0 6px; }
+#mast-desc { margin-top: 8px; line-height: 1.7; color: var(--ink-dim); max-width: 420px; }
+
+/* ---- vehicle index ---- */
+#vehicle-index { top: 220px; left: 34px; width: 210px; }
+#vehicle-list { list-style: none; }
+#vehicle-list li {
+  pointer-events: auto;
+  cursor: pointer;
+  padding: 7px 9px;
+  border: 1px solid var(--ink-faint);
+  margin-bottom: 6px;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  background: rgba(5, 53, 119, 0.35);
+  transition: border-color 120ms, background 120ms;
+}
+#vehicle-list li:hover, #vehicle-list li.active {
+  border-color: var(--hi);
+  background: rgba(198, 227, 254, 0.08);
+}
+#vehicle-list .v-code { color: var(--ink-dim); font-size: 10px; }
+#vehicle-list .v-title { color: var(--hi); letter-spacing: 0.12em; }
+
+/* ---- buttons ---- */
+.btn-grid { display: flex; flex-direction: column; gap: 6px; pointer-events: auto; }
+.btn-grid button {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-align: left;
+  color: var(--ink);
+  background: rgba(5, 53, 119, 0.35);
+  border: 1px solid var(--ink-faint);
+  padding: 7px 12px;
+  cursor: pointer;
+  min-width: 168px;
+  transition: border-color 120ms, background 120ms, color 120ms;
+}
+.btn-grid button:hover { border-color: var(--hi); color: var(--hi); }
+.btn-grid button.active {
+  border-color: var(--hi);
+  color: var(--bg);
+  background: var(--ink);
+}
+.btn-grid button:disabled { opacity: 0.35; cursor: default; }
+.btn-grid button .k { color: var(--ink-dim); margin-right: 8px; }
+.btn-grid button.active .k { color: var(--bg-deep); }
+
+/* ---- camera views / actions ---- */
+#camera-views { top: 30px; right: 34px; width: 200px; }
+#system-actions { bottom: 34px; right: 34px; width: 200px; }
+
+/* ---- telemetry ---- */
+#telemetry { bottom: 34px; left: 34px; width: 230px; }
+.tele-grid {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  row-gap: 4px;
+  font-size: 11px;
+}
+.tele-grid span { color: var(--ink-dim); letter-spacing: 0.14em; }
+.tele-grid b { color: var(--hi); font-weight: 400; text-align: right; min-width: 76px; }
+
+/* ---- part label ---- */
+#part-label {
+  position: fixed;
+  z-index: 5;
+  pointer-events: none;
+  transform: translate(14px, -50%);
+  padding: 8px 10px;
+  border: 1px solid var(--hi);
+  border-left-width: 3px;
+  background: rgba(5, 53, 119, 0.82);
+  max-width: 240px;
+}
+#part-label::before {
+  content: "";
+  position: absolute;
+  left: -15px; top: 50%;
+  width: 14px; height: 1px;
+  background: var(--hi);
+}
+#part-label .pl-code { font-size: 10px; letter-spacing: 0.2em; color: var(--ink-dim); }
+#part-label .pl-title { font-size: 12px; letter-spacing: 0.12em; color: var(--hi); margin: 2px 0; }
+#part-label .pl-desc { font-size: 10px; line-height: 1.6; color: var(--ink-dim); }
+
+/* ---- loading ---- */
+#loading {
+  position: fixed;
+  inset: 0;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  letter-spacing: 0.3em;
+  color: var(--ink-dim);
+  background: var(--bg);
+  transition: opacity 400ms;
+}
+#loading.done { opacity: 0; pointer-events: none; }
+
+@media (max-width: 900px) {
+  #masthead { max-width: 300px; }
+  #masthead h1 { font-size: 22px; }
+  #mast-desc { display: none; }
+  #vehicle-index { top: auto; bottom: 150px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #loading { transition: none; }
+  #vehicle-list li, .btn-grid button { transition: none; }
+}

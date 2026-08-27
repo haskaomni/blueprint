@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BLUEPRINT // VEHICLE VIEWER</title>
+  <link rel="stylesheet" href="/src/style.css" />
+</head>
+<body>
+  <div id="blueprint-bg" aria-hidden="true"></div>
+  <div id="blueprint-noise" aria-hidden="true"></div>
+
+  <canvas id="viewport"></canvas>
+
+  <!-- drawing frame + corner tick marks -->
+  <div id="frame" aria-hidden="true">
+    <div class="corner tl"></div>
+    <div class="corner tr"></div>
+    <div class="corner bl"></div>
+    <div class="corner br"></div>
+  </div>
+
+  <header id="masthead">
+    <div class="mast-row">
+      <span class="mast-tag">ENGINEERING BLUEPRINT</span>
+      <span class="mast-tag dim" id="mast-drawing">DWG —</span>
+    </div>
+    <h1 id="mast-title">VEHICLE VIEWER</h1>
+    <div class="mast-sub">
+      <span id="mast-code">—</span>
+      <span class="sep">/</span>
+      <span id="mast-faction">—</span>
+      <span class="sep">/</span>
+      <span id="mast-role">—</span>
+    </div>
+    <p id="mast-desc"></p>
+  </header>
+
+  <nav id="vehicle-index" aria-label="Vehicle index">
+    <div class="panel-title">VEHICLE INDEX</div>
+    <ul id="vehicle-list"></ul>
+  </nav>
+
+  <section id="camera-views" aria-label="Camera views">
+    <div class="panel-title">CAMERA VIEW <span id="view-state" class="panel-tag">ISO</span></div>
+    <div id="view-buttons" class="btn-grid"></div>
+  </section>
+
+  <section id="system-actions" aria-label="System actions">
+    <div class="panel-title">SYSTEM ACTION</div>
+    <div id="action-buttons" class="btn-grid"></div>
+  </section>
+
+  <section id="telemetry" aria-label="Telemetry">
+    <div class="panel-title">TELEMETRY</div>
+    <div class="tele-grid">
+      <span>AZIMUTH</span><b id="tele-az">—</b>
+      <span>ELEVATION</span><b id="tele-el">—</b>
+      <span>ZOOM</span><b id="tele-zoom">—</b>
+      <span>EXPLODE</span><b id="tele-explode">—</b>
+      <span>FPS</span><b id="tele-fps">—</b>
+    </div>
+  </section>
+
+  <div id="part-label" hidden>
+    <div class="pl-code"></div>
+    <div class="pl-title"></div>
+    <div class="pl-desc"></div>
+  </div>
+
+  <div id="loading">LOADING DRAWING…</div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
